@@ -111,6 +111,43 @@ export async function triggerInvestigation(): Promise<string> {
 
   store.addIncident(newIncident);
 
+  // Seed Incident Evidence packages
+  if (archetype === "memory_leak") {
+    store.addEvidence({
+      id: `ev_${incidentId}_log`,
+      incidentId,
+      type: "log",
+      content: `[Server] Event trigger notification:change - listeners count: 512\n[Server] Heap snapshot taken (size: 412MB)\n[Server] Process exit: Out of Memory (OOM) error code 137`,
+    });
+    store.addEvidence({
+      id: `ev_${incidentId}_trace`,
+      incidentId,
+      type: "trace",
+      content: `FATAL ERROR: Ineffective mark-compacts near heap limit Allocation failed - JavaScript heap out of memory\n at notification-manager.ts:147`,
+    });
+  } else if (archetype === "db_exhaustion") {
+    store.addEvidence({
+      id: `ev_${incidentId}_log`,
+      incidentId,
+      type: "log",
+      content: `postgres_1 | WARNING: active database connections: 98 / 100 max_connections\nworker_1 | ConnectionError: Could not retrieve connection from pool in 5000ms`,
+    });
+  } else if (archetype === "promise_rejection") {
+    store.addEvidence({
+      id: `ev_${incidentId}_log`,
+      incidentId,
+      type: "log",
+      content: `[API] Stripe verification threw InvalidSignatureError.\n[Runtime] UnhandledPromiseRejection: InvalidSignatureError: No signatures found matching the expected signature.`,
+    });
+  } else if (archetype === "ml_drift") {
+    store.addEvidence({
+      id: `ev_${incidentId}_log`,
+      incidentId,
+      type: "log",
+      content: `[Monitor] validation accuracy threshold check failed: 0.78 < 0.82\n[DriftTracker] feature shift detected on scaler normalizer parameters.`,
+    });
+  }
+
   // Simulate agent pipeline advancing with delays
   simulatePipeline(incidentId, archetype);
 
@@ -159,7 +196,9 @@ async function simulatePipeline(incidentId: string, archetype: Archetype) {
           ? ["EventEmitter listener boundaries retain closures", "V8 memory space leak"]
           : archetype === "db_exhaustion"
           ? ["Heavy weight loading blocks db query executions", "Pool allocation overflow"]
-          : ["Cryptographic verify mismatch throws error code exception", "Unhandles key rotates"],
+          : archetype === "promise_rejection"
+          ? ["Cryptographic verify mismatch throws error code exception", "Unhandled Stripe key rotate"]
+          : ["A stale normalization scaler leads to predictions data bias", "Accuracy degradation on validation sets"],
         reasoning: config.agentOutputs[2],
         confidence: 90 + Math.floor(Math.random() * 8),
         affectedServices: [config.repoId.replace("repo_", "")],
@@ -172,7 +211,13 @@ async function simulatePipeline(incidentId: string, archetype: Archetype) {
         incidentId,
         type: "immediate",
         title: config.agentOutputs[3],
-        description: "Implement structural cleanups inside lifecycle hooks to prevent memory reference leaks.",
+        description: archetype === "memory_leak"
+          ? "Implement structural cleanups inside lifecycle hooks to prevent memory reference leaks."
+          : archetype === "db_exhaustion"
+          ? "Separate weights load initialization logic to run outside database transaction pool scopes."
+          : archetype === "promise_rejection"
+          ? "Wrap external constructEvent check calls inside try-catch handler blocks."
+          : "Automate StandardScaler model fit operations using a background task runner.",
         confidence: 94,
         effort: "low",
         risk: "low",
@@ -186,10 +231,26 @@ async function simulatePipeline(incidentId: string, archetype: Archetype) {
         incidentId,
         diff: archetype === "memory_leak"
           ? `diff --git a/src/notification-manager.ts b/src/notification-manager.ts\nindex d38f2..4c910 100644\n--- a/src/notification-manager.ts\n+++ b/src/notification-manager.ts\n@@ -143,3 +143,7 @@\n   constructor() {\n     notificationEmitter.on('change', this.handleChange);\n   }\n+\n+  destroy() {\n+    notificationEmitter.off('change', this.handleChange);\n+  }`
-          : `diff --git a/src/webhook.go b/src/webhook.go\nindex 4c910..d38f2 100644\n--- a/src/webhook.go\n+++ b/src/webhook.go\n@@ -52,5 +52,9 @@\n-  event, err := stripe.ConstructEvent(body, sigHeader, secret)\n+  event, err := stripe.ConstructEvent(body, sigHeader, secret)\n+  if err != nil {\n+      w.WriteHeader(http.StatusBadRequest)\n+      return\n+  }`,
-        affectedFiles: ["notification-manager.ts"],
+          : archetype === "db_exhaustion"
+          ? `diff --git a/src/pipeline/evaluation.py b/src/pipeline/evaluation.py\nindex a12e3..b89f2 100644\n--- a/src/pipeline/evaluation.py\n+++ b/src/pipeline/evaluation.py\n@@ -12,4 +12,8 @@\n-def load_model_weights():\n-    with db.transaction():\n-        weights = fetch_weights()\n-        init_ml_model(weights)\n+def load_model_weights():\n+    weights = fetch_weights() # runs outside of transactions\n+    init_ml_model(weights)`
+          : archetype === "promise_rejection"
+          ? `diff --git a/src/webhook.go b/src/webhook.go\nindex 4c910..d38f2 100644\n--- a/src/webhook.go\n+++ b/src/webhook.go\n@@ -52,5 +52,9 @@\n-  event, err := stripe.ConstructEvent(body, sigHeader, secret)\n+  event, err := stripe.ConstructEvent(body, sigHeader, secret)\n+  if err != nil {\n+      w.WriteHeader(http.StatusBadRequest)\n+      return\n+  }`
+          : `diff --git a/src/scaler.py b/src/scaler.py\nindex d89a2..c103e 100644\n--- a/src/scaler.py\n+++ b/src/scaler.py\n@@ -15,2 +15,5 @@\n-def normalize_inputs(df):\n-    return preloaded_scaler.transform(df)\n+def normalize_inputs(df):\n+    if is_scaler_stale():\n+        preloaded_scaler.fit(get_recent_production_data())\n+    return preloaded_scaler.transform(df)`,
+        affectedFiles: archetype === "memory_leak"
+          ? ["src/notification-manager.ts"]
+          : archetype === "db_exhaustion"
+          ? ["src/pipeline/evaluation.py"]
+          : archetype === "promise_rejection"
+          ? ["src/webhook.go"]
+          : ["src/scaler.py"],
         explanation: config.agentOutputs[4],
-        sideEffects: "No side effects. Memory remains flat post-cleanup.",
+        sideEffects: archetype === "memory_leak"
+          ? "No side effects. Memory remains flat post-cleanup."
+          : archetype === "db_exhaustion"
+          ? "Releases active Postgres slots. Improves overall thread availability."
+          : archetype === "promise_rejection"
+          ? "Returns Bad Request instead of crashing thread execution."
+          : "Slight model overhead during fit updates on initial startup.",
       };
       store.addPatch(patch);
     } else if (i === 5) {
@@ -198,12 +259,18 @@ async function simulatePipeline(incidentId: string, archetype: Archetype) {
         id: `val_sim_${incidentId}`,
         patchId: `patch_sim_${incidentId}`,
         incidentId,
-        testsPassed: 12,
+        testsPassed: archetype === "memory_leak" ? 12 : archetype === "db_exhaustion" ? 14 : archetype === "promise_rejection" ? 8 : 10,
         testsFailed: 0,
         lintStatus: "passed",
         securityStatus: "passed",
         overallStatus: "passed",
-        report: `[Sandbox Container] Running verification suite:\n  ✓ unit_test_cleanup_handling (40ms)\n  ✓ integration_leak_profile (120ms)\nLint checks: PASS\nVulnerability checks: 0 warnings.\nValidation PASS.`,
+        report: archetype === "memory_leak"
+          ? `[Sandbox Container] Running verification suite:\n  ✓ unit_test_cleanup_handling (40ms)\n  ✓ integration_leak_profile (120ms)\nLint checks: PASS\nVulnerability checks: 0 warnings.\nValidation PASS.`
+          : archetype === "db_exhaustion"
+          ? `[Sandbox Container] Checking database locks under stress test:\n  ✓ connection_pool_stable (200ms)\n  ✓ latency_remains_flat (45ms)\nValidation PASS.`
+          : archetype === "promise_rejection"
+          ? `[Sandbox Container] Validating webhooks verify handlers:\n  ✓ construct_event_signature_check (15ms)\n  ✓ bad_signature_returns_400 (10ms)\nValidation PASS.`
+          : `[Sandbox Container] Running model evaluation check:\n  ✓ accuracy_recovers_to_0.91 (500ms)\n  ✓ feature_scaler_parameters_fitted (80ms)\nValidation PASS.`,
       };
       store.addValidation(val);
     } else if (i === 6) {
@@ -214,8 +281,8 @@ async function simulatePipeline(incidentId: string, archetype: Archetype) {
         incidentId,
         prNumber: Math.floor(100 + Math.random() * 900),
         prUrl: "https://github.com/SirLooseNuts/IncidentPilot/pulls",
-        title: `fix: automated memory leak cleanup correction for ${incidentId}`,
-        body: `## Root Cause Analysis\n${config.agentOutputs[2]}\n\n## Resolution Patch\n${config.agentOutputs[4]}\n\n## Validation Report\nAll 12 sandbox verification tests passed successfully.`,
+        title: `fix: automated SRE correction patch for ${incidentId}`,
+        body: `## Root Cause Analysis\n${config.agentOutputs[2]}\n\n## Resolution Patch\n${config.agentOutputs[4]}\n\n## Validation Report\nAll sandbox verification tests passed successfully.`,
         status: "open",
         createdAt: new Date().toISOString(),
       };
