@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clipboard,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -34,6 +35,7 @@ const intelligenceNav = [
 
 const systemNav = [
   { label: "AI Activity", href: "/ai-activity", icon: Activity },
+  { label: "Analytics", href: "/analytics", icon: BarChart3 },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
