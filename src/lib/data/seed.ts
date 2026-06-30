@@ -791,3 +791,71 @@ export const mockKnowledgeEntries: KnowledgeEntry[] = [
   },
 ];
 
+export const mockRepoLogs: RepoLog[] = [
+  {
+    id: "log_001_1",
+    repoId: "repo_user_api",
+    type: "commit",
+    title: "feat: Add event dispatch system for notification settings",
+    description: "Introduced EventEmitter listeners inside NotificationSettingsView (Commit 8a4d2f19)",
+    author: "sarah.chen",
+    createdAt: "2026-06-29T23:30:00Z",
+  },
+  {
+    id: "log_001_2",
+    repoId: "repo_user_api",
+    type: "settings_changed",
+    title: "Configure alerts channel",
+    description: "Changed Webhook Alert dispatch levels threshold from HIGH to MEDIUM",
+    author: "jane.doe",
+    createdAt: "2026-06-29T20:15:00Z",
+  },
+  {
+    id: "log_001_3",
+    repoId: "repo_user_api",
+    type: "branch_created",
+    title: "Branch created: feat/notifications",
+    description: "Branch feat/notifications branched from main base",
+    author: "sarah.chen",
+    createdAt: "2026-06-29T18:00:00Z",
+  },
+  {
+    id: "log_002_1",
+    repoId: "repo_ml_pipeline",
+    type: "commit",
+    title: "fix: Add multi-threading support to evaluation pipeline",
+    description: "Added multi-threading support to evaluate parallel queries (Commit 4c9b1e22)",
+    author: "alex.kumar",
+    createdAt: "2026-06-29T23:10:00Z",
+  },
+  {
+    id: "log_002_2",
+    repoId: "repo_ml_pipeline",
+    type: "settings_changed",
+    title: "Tune scaler artifact path",
+    description: "Configured telemetry pipeline to point to scale v2 recommendations weight models",
+    author: "lisa.wang",
+    createdAt: "2026-06-29T14:30:00Z",
+  },
+  {
+    id: "log_003_1",
+    repoId: "repo_payments_go",
+    type: "commit",
+    title: "refactor: Upgrade Stripe SDK and enhance checkout logic",
+    description: "Upgraded backend Stripe SDK wrapper and modified checkout router handlers (Commit 1f3e5c9b)",
+    author: "mike.johnson",
+    createdAt: "2026-06-29T22:45:00Z",
+  },
+  {
+    id: "log_003_2",
+    repoId: "repo_payments_go",
+    type: "import",
+    title: "File uploaded for analysis",
+    description: "Uploaded webhook_listener.go to trigger Stripe unhandled signature validation analysis",
+    author: "mike.johnson",
+    createdAt: "2026-06-29T22:42:00Z",
+  },
+];
+import { RepoLog } from "../types";
+
+

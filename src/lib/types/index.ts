@@ -160,3 +160,14 @@ export interface KnowledgeEntry {
   tags: string[];
   createdAt: string;
 }
+
+export interface RepoLog {
+  id: string;
+  repoId: string;
+  type: "commit" | "branch_created" | "settings_changed" | "import";
+  title: string;
+  description: string;
+  author: string;
+  createdAt: string;
+}
+

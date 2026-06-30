@@ -14,6 +14,7 @@ import {
   Zap,
   X,
   ChevronDown,
+  Upload,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -91,10 +92,37 @@ export function ManualImportPanel() {
   const [content, setContent] = useState("");
   const [repoId, setRepoId] = useState("repo_user_api");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
   const router = useRouter();
 
   const repos = store.getRepositories();
   const selectedType = PASTE_TYPES.find((p) => p.value === pasteType)!;
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFileName(file.name);
+    
+    // Auto-detect type by extension
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext === 'yaml' || ext === 'yml') {
+      setPasteType('workflow');
+    } else if (ext === 'diff' || ext === 'patch') {
+      setPasteType('diff');
+    } else if (ext === 'log' || ext === 'txt') {
+      setPasteType('log');
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setContent(event.target.result as string);
+        toast.success(`Loaded file: ${file.name}`);
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const handleAnalyze = async () => {
     if (!content.trim()) {
@@ -103,7 +131,7 @@ export function ManualImportPanel() {
     }
 
     setIsAnalyzing(true);
-    toast.loading("Analyzing pasted content…");
+    toast.loading("Analyzing uploaded content…");
 
     // Add evidence to store for next incident
     const evidenceId = `ev_manual_${Date.now()}`;
@@ -125,6 +153,19 @@ export function ManualImportPanel() {
       content,
     });
 
+    // Write a modification log for this repository
+    store.addRepoLog({
+      id: `log_import_${Date.now()}`,
+      repoId,
+      type: "import",
+      title: fileName ? `File analyzed: ${fileName}` : "Raw context text analyzed",
+      description: fileName 
+        ? `Uploaded and analyzed file: ${fileName} (${content.length} chars) triggering AI investigation pipeline.` 
+        : `Analyzed raw imported logs context payload (${content.length} chars) triggering pipeline.`,
+      author: "jane.doe",
+      createdAt: new Date().toISOString(),
+    });
+
     toast.dismiss();
     toast.success("Investigation started!", {
       description: `Incident ${incidentId} created. Redirecting to analysis…`,
@@ -132,6 +173,7 @@ export function ManualImportPanel() {
 
     setIsAnalyzing(false);
     setContent("");
+    setFileName(null);
 
     setTimeout(() => {
       router.push(`/incidents/${incidentId}`);
@@ -217,6 +259,35 @@ export function ManualImportPanel() {
           })}
         </div>
 
+        {/* File Upload zone */}
+        <div className="rounded-lg border border-dashed border-border bg-background/30 p-4 flex flex-col items-center justify-center text-center transition-colors hover:bg-accent/10 relative">
+          <input
+            type="file"
+            onChange={handleFileUpload}
+            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            accept=".log,.txt,.yaml,.yml,.diff,.patch,.go,.py,.ts,.js,.java"
+          />
+          <Upload className="h-6 w-6 text-muted-foreground mb-2" />
+          <p className="text-xs font-semibold text-foreground">
+            {fileName ? `Selected: ${fileName}` : "Drag and drop or click to upload log/trace files"}
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-1">
+            Supports .log, .txt, .yaml, .diff, source code files (max 5MB)
+          </p>
+          {fileName && (
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                setFileName(null);
+                setContent("");
+              }}
+              className="mt-2 rounded bg-muted hover:bg-accent px-2 py-1 text-[10px] text-muted-foreground z-10 flex items-center gap-1"
+            >
+              <X className="h-3 w-3" /> Clear file
+            </button>
+          )}
+        </div>
+
         {/* Textarea */}
         <div className="relative">
           <textarea
@@ -226,7 +297,7 @@ export function ManualImportPanel() {
             rows={12}
             className="w-full resize-y rounded-lg border border-input bg-[oklch(0.07_0.01_250)] px-4 py-3 font-mono text-xs leading-relaxed text-foreground/90 placeholder:font-sans placeholder:text-sm placeholder:text-muted-foreground/50 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
           />
-          {content && (
+          {content && !fileName && (
             <button
               onClick={() => setContent("")}
               className="absolute right-3 top-3 rounded p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"

@@ -11,6 +11,7 @@ import {
   mockPullRequests,
   mockPredictions,
   mockKnowledgeEntries,
+  mockRepoLogs,
 } from "./seed";
 import {
   Repository,
@@ -25,6 +26,7 @@ import {
   Prediction,
   KnowledgeEntry,
   Organization,
+  RepoLog,
 } from "../types";
 
 type Listener = () => void;
@@ -44,6 +46,7 @@ class IncidentPilotStore {
   public pullRequests: PullRequest[] = [...mockPullRequests];
   public predictions: Prediction[] = [...mockPredictions];
   public knowledgeEntries: KnowledgeEntry[] = [...mockKnowledgeEntries];
+  public repoLogs: RepoLog[] = [...mockRepoLogs];
 
   // Subscribe to changes
   public subscribe(listener: Listener): () => void {
@@ -212,6 +215,21 @@ class IncidentPilotStore {
 
   public addKnowledgeEntry(entry: KnowledgeEntry) {
     this.knowledgeEntries = [entry, ...this.knowledgeEntries];
+    this.notify();
+  }
+
+  // Repository Logs Methods
+  public getRepoLogs(repoId?: string) {
+    if (repoId) {
+      return this.repoLogs
+        .filter((log) => log.repoId === repoId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    return this.repoLogs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public addRepoLog(log: RepoLog) {
+    this.repoLogs = [log, ...this.repoLogs];
     this.notify();
   }
 }
