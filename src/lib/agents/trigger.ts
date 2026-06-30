@@ -1,5 +1,5 @@
 import { store } from "@/lib/data/store";
-import { Incident, AgentRun } from "@/lib/types";
+import { Incident, AgentRun, RootCause, Recommendation, Patch, Validation, PullRequest } from "@/lib/types";
 
 const ARCHETYPES = ["memory_leak", "db_exhaustion", "promise_rejection", "ml_drift"] as const;
 type Archetype = typeof ARCHETYPES[number];
@@ -147,6 +147,80 @@ async function simulatePipeline(incidentId: string, archetype: Archetype) {
       pipelineStage: i + 1,
       status: i === 8 ? "resolved" : i >= 6 ? "pr_created" : i >= 5 ? "validated" : i >= 4 ? "patched" : i >= 2 ? "root_caused" : "investigating",
     });
+
+    // Write stage findings to global store to update UI tabs dynamically
+    if (i === 2) {
+      // Explain stage: Generate root cause analysis
+      const rc: RootCause = {
+        id: `rc_${incidentId}`,
+        incidentId,
+        primaryCause: config.title,
+        secondaryCauses: archetype === "memory_leak" 
+          ? ["EventEmitter listener boundaries retain closures", "V8 memory space leak"]
+          : archetype === "db_exhaustion"
+          ? ["Heavy weight loading blocks db query executions", "Pool allocation overflow"]
+          : ["Cryptographic verify mismatch throws error code exception", "Unhandles key rotates"],
+        reasoning: config.agentOutputs[2],
+        confidence: 90 + Math.floor(Math.random() * 8),
+        affectedServices: [config.repoId.replace("repo_", "")],
+      };
+      store.addRootCause(rc);
+    } else if (i === 3) {
+      // Recommend stage: Create recommendation
+      const rec: Recommendation = {
+        id: `rec_sim_${incidentId}`,
+        incidentId,
+        type: "immediate",
+        title: config.agentOutputs[3],
+        description: "Implement structural cleanups inside lifecycle hooks to prevent memory reference leaks.",
+        confidence: 94,
+        effort: "low",
+        risk: "low",
+        accepted: true,
+      };
+      store.addRecommendation(rec);
+    } else if (i === 4) {
+      // Patch stage: Create code diff patch
+      const patch: Patch = {
+        id: `patch_sim_${incidentId}`,
+        incidentId,
+        diff: archetype === "memory_leak"
+          ? `diff --git a/src/notification-manager.ts b/src/notification-manager.ts\nindex d38f2..4c910 100644\n--- a/src/notification-manager.ts\n+++ b/src/notification-manager.ts\n@@ -143,3 +143,7 @@\n   constructor() {\n     notificationEmitter.on('change', this.handleChange);\n   }\n+\n+  destroy() {\n+    notificationEmitter.off('change', this.handleChange);\n+  }`
+          : `diff --git a/src/webhook.go b/src/webhook.go\nindex 4c910..d38f2 100644\n--- a/src/webhook.go\n+++ b/src/webhook.go\n@@ -52,5 +52,9 @@\n-  event, err := stripe.ConstructEvent(body, sigHeader, secret)\n+  event, err := stripe.ConstructEvent(body, sigHeader, secret)\n+  if err != nil {\n+      w.WriteHeader(http.StatusBadRequest)\n+      return\n+  }`,
+        affectedFiles: ["notification-manager.ts"],
+        explanation: config.agentOutputs[4],
+        sideEffects: "No side effects. Memory remains flat post-cleanup.",
+      };
+      store.addPatch(patch);
+    } else if (i === 5) {
+      // Validate stage: Compile validation tests passes
+      const val: Validation = {
+        id: `val_sim_${incidentId}`,
+        patchId: `patch_sim_${incidentId}`,
+        incidentId,
+        testsPassed: 12,
+        testsFailed: 0,
+        lintStatus: "passed",
+        securityStatus: "passed",
+        overallStatus: "passed",
+        report: `[Sandbox Container] Running verification suite:\n  ✓ unit_test_cleanup_handling (40ms)\n  ✓ integration_leak_profile (120ms)\nLint checks: PASS\nVulnerability checks: 0 warnings.\nValidation PASS.`,
+      };
+      store.addValidation(val);
+    } else if (i === 6) {
+      // PR stage: Build GitHub PR
+      const pr: PullRequest = {
+        id: `pr_sim_${incidentId}`,
+        patchId: `patch_sim_${incidentId}`,
+        incidentId,
+        prNumber: Math.floor(100 + Math.random() * 900),
+        prUrl: "https://github.com/SirLooseNuts/IncidentPilot/pulls",
+        title: `fix: automated memory leak cleanup correction for ${incidentId}`,
+        body: `## Root Cause Analysis\n${config.agentOutputs[2]}\n\n## Resolution Patch\n${config.agentOutputs[4]}\n\n## Validation Report\nAll 12 sandbox verification tests passed successfully.`,
+        status: "open",
+        createdAt: new Date().toISOString(),
+      };
+      store.addPullRequest(pr);
+    }
 
     // Wait for "processing"
     await new Promise((r) => setTimeout(r, 500 + Math.random() * 1000));
